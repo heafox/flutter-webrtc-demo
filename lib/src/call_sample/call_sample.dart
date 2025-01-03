@@ -7,6 +7,7 @@ import 'package:flutter_webrtc/flutter_webrtc.dart';
 class CallSample extends StatefulWidget {
   static String tag = 'call_sample';
   final String host;
+
   CallSample({required this.host});
 
   @override
@@ -24,23 +25,20 @@ class _CallSampleState extends State<CallSample> {
   DesktopCapturerSource? selected_source_;
   bool _waitAccept = false;
 
-  // ignore: unused_element
-  _CallSampleState();
-
   @override
-  initState() {
+  void initState() {
     super.initState();
     initRenderers();
     _connect(context);
   }
 
-  initRenderers() async {
+  void initRenderers() async {
     await _localRenderer.initialize();
     await _remoteRenderer.initialize();
   }
 
   @override
-  deactivate() {
+  void deactivate() {
     super.deactivate();
     _signaling?.close();
     _localRenderer.dispose();
@@ -178,31 +176,31 @@ class _CallSampleState extends State<CallSample> {
     );
   }
 
-  _invitePeer(BuildContext context, String peerId, bool useScreen) async {
+  void _invitePeer(BuildContext context, String peerId, bool useScreen) async {
     if (_signaling != null && peerId != _selfId) {
       _signaling?.invite(peerId, 'video', useScreen);
     }
   }
 
-  _accept() {
+  void _accept() {
     if (_session != null) {
       _signaling?.accept(_session!.sid, 'video');
     }
   }
 
-  _reject() {
+  void _reject() {
     if (_session != null) {
       _signaling?.reject(_session!.sid);
     }
   }
 
-  _hangUp() {
+  void _hangUp() {
     if (_session != null) {
       _signaling?.bye(_session!.sid);
     }
   }
 
-  _switchCamera() {
+  void _switchCamera() {
     _signaling?.switchCamera();
   }
 
@@ -241,40 +239,8 @@ class _CallSampleState extends State<CallSample> {
     if (screenStream != null) _signaling?.switchToScreenSharing(screenStream);
   }
 
-  _muteMic() {
+  void _muteMic() {
     _signaling?.muteMic();
-  }
-
-  _buildRow(context, peer) {
-    var self = (peer['id'] == _selfId);
-    return ListBody(children: <Widget>[
-      ListTile(
-        title: Text(self
-            ? peer['name'] + ', ID: ${peer['id']} ' + ' [Your self]'
-            : peer['name'] + ', ID: ${peer['id']} '),
-        onTap: null,
-        trailing: SizedBox(
-            width: 100.0,
-            child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: <Widget>[
-                  IconButton(
-                    icon: Icon(self ? Icons.close : Icons.videocam,
-                        color: self ? Colors.grey : Colors.black),
-                    onPressed: () => _invitePeer(context, peer['id'], false),
-                    tooltip: 'Video calling',
-                  ),
-                  IconButton(
-                    icon: Icon(self ? Icons.close : Icons.screen_share,
-                        color: self ? Colors.grey : Colors.black),
-                    onPressed: () => _invitePeer(context, peer['id'], true),
-                    tooltip: 'Screen sharing',
-                  )
-                ])),
-        subtitle: Text('[' + peer['user_agent'] + ']'),
-      ),
-      Divider()
-    ]);
   }
 
   @override
@@ -326,17 +292,18 @@ class _CallSampleState extends State<CallSample> {
               return Container(
                 child: Stack(children: <Widget>[
                   Positioned(
-                      left: 0.0,
-                      right: 0.0,
-                      top: 0.0,
-                      bottom: 0.0,
-                      child: Container(
-                        margin: EdgeInsets.fromLTRB(0.0, 0.0, 0.0, 0.0),
-                        width: MediaQuery.of(context).size.width,
-                        height: MediaQuery.of(context).size.height,
-                        child: RTCVideoView(_remoteRenderer),
-                        decoration: BoxDecoration(color: Colors.black54),
-                      )),
+                    left: 0.0,
+                    right: 0.0,
+                    top: 0.0,
+                    bottom: 0.0,
+                    child: Container(
+                      margin: EdgeInsets.fromLTRB(0.0, 0.0, 0.0, 0.0),
+                      width: MediaQuery.of(context).size.width,
+                      height: MediaQuery.of(context).size.height,
+                      child: RTCVideoView(_remoteRenderer),
+                      decoration: BoxDecoration(color: Colors.black54),
+                    ),
+                  ),
                   Positioned(
                     left: 20.0,
                     top: 20.0,
@@ -354,10 +321,47 @@ class _CallSampleState extends State<CallSample> {
           : ListView.builder(
               shrinkWrap: true,
               padding: const EdgeInsets.all(0.0),
-              itemCount: (_peers != null ? _peers.length : 0),
+              itemCount: _peers.length,
               itemBuilder: (context, i) {
                 return _buildRow(context, _peers[i]);
-              }),
+              },
+            ),
+    );
+  }
+
+  Widget _buildRow(BuildContext context, peer) {
+    var self = (peer['id'] == _selfId);
+    return ListBody(
+      children: <Widget>[
+        ListTile(
+          title: Text(self
+              ? peer['name'] + ', ID: ${peer['id']} ' + ' [Your self]'
+              : peer['name'] + ', ID: ${peer['id']} '),
+          onTap: null,
+          trailing: SizedBox(
+            width: 100.0,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: <Widget>[
+                IconButton(
+                  icon: Icon(self ? Icons.close : Icons.videocam,
+                      color: self ? Colors.grey : Colors.black),
+                  onPressed: () => _invitePeer(context, peer['id'], false),
+                  tooltip: 'Video calling',
+                ),
+                IconButton(
+                  icon: Icon(self ? Icons.close : Icons.screen_share,
+                      color: self ? Colors.grey : Colors.black),
+                  onPressed: () => _invitePeer(context, peer['id'], true),
+                  tooltip: 'Screen sharing',
+                ),
+              ],
+            ),
+          ),
+          subtitle: Text('[' + peer['user_agent'] + ']'),
+        ),
+        Divider(),
+      ],
     );
   }
 }
