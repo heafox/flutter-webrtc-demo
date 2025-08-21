@@ -79,6 +79,13 @@ class _ThumbnailWidgetState extends State<ThumbnailWidget> {
 
 // ignore: must_be_immutable
 class ScreenSelectDialog extends Dialog {
+  final Map<String, DesktopCapturerSource> _sources = {};
+  SourceType _sourceType = SourceType.Screen;
+  DesktopCapturerSource? _selected_source;
+  final List<StreamSubscription<DesktopCapturerSource>> _subscriptions = [];
+  StateSetter? _stateSetter;
+  Timer? _timer;
+
   ScreenSelectDialog() {
     Future.delayed(Duration(milliseconds: 100), () {
       _getSources();
@@ -98,12 +105,6 @@ class ScreenSelectDialog extends Dialog {
       _stateSetter?.call(() {});
     }));
   }
-  final Map<String, DesktopCapturerSource> _sources = {};
-  SourceType _sourceType = SourceType.Screen;
-  DesktopCapturerSource? _selected_source;
-  final List<StreamSubscription<DesktopCapturerSource>> _subscriptions = [];
-  StateSetter? _stateSetter;
-  Timer? _timer;
 
   void _ok(context) async {
     _timer?.cancel();
