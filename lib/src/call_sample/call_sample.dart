@@ -101,7 +101,6 @@ class _CallSampleState extends State<CallSample> {
           });
 
           break;
-        case CallState.CallStateRinging:
       }
     };
 
