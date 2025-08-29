@@ -2,14 +2,13 @@ import 'dart:convert';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../utils/screen_select_dialog.dart';
 import 'random_string.dart';
 
 import '../utils/device_info.dart'
     if (dart.library.js) '../utils/device_info_web.dart';
-import '../utils/websocket.dart'
-    if (dart.library.js) '../utils/websocket_web.dart';
 import '../utils/turn.dart' if (dart.library.js) '../utils/turn_web.dart';
 
 enum SignalingState {
@@ -46,7 +45,7 @@ class Signaling {
   JsonEncoder _encoder = JsonEncoder();
   JsonDecoder _decoder = JsonDecoder();
   String _selfId = randomNumeric(6);
-  SimpleWebSocket? _socket;
+  WebSocketChannel? _channel;
   BuildContext? _context;
   var _host;
   var _port = 8086;
@@ -100,7 +99,7 @@ class Signaling {
 
   close() async {
     await _cleanSessions();
-    _socket?.close();
+    _channel?.sink.close();
   }
 
   void switchCamera() {
@@ -283,54 +282,46 @@ class Signaling {
   }
 
   Future<void> connect() async {
-    var url = 'https://$_host:$_port/ws';
-    _socket = SimpleWebSocket(url);
-
-    print('connect to $url');
+    print('connect to $_host');
 
     if (_turnCredential == null) {
-      try {
-        _turnCredential = await getTurnCredential(_host, _port);
-        /*{
-            "username": "1584195784:mbzrxpgjys",
-            "password": "isyl6FF6nqMTB9/ig5MrMRUXqZg",
-            "ttl": 86400,
-            "uris": ["turn:127.0.0.1:19302?transport=udp"]
-          }
-        */
-        _iceServers = {
-          'iceServers': [
-            {
-              'urls': _turnCredential['uris'][0],
-              'username': _turnCredential['username'],
-              'credential': _turnCredential['password']
-            },
-          ]
-        };
-      } catch (e) {}
+      _turnCredential = await getTurnCredential(_host, _port);
+      _iceServers = {
+        'iceServers': [
+          {
+            'urls': _turnCredential['uris'][0],
+            'username': _turnCredential['username'],
+            'credential': _turnCredential['password']
+          },
+        ]
+      };
     }
 
-    _socket?.onOpen = () {
-      print('onOpen');
-      onSignalingStateChange?.call(SignalingState.ConnectionOpen);
-      _send('new', {
-        'name': DeviceInfo.label,
-        'id': _selfId,
-        'user_agent': DeviceInfo.userAgent
-      });
-    };
+    final channel = WebSocketChannel.connect(
+      Uri(scheme: 'ws', host: _host, port: _port, path: '/ws'),
+    );
+    _channel = channel;
 
-    _socket?.onMessage = (message) {
-      print('Received data: ' + message);
-      onMessage(_decoder.convert(message));
-    };
+    await channel.ready;
 
-    _socket?.onClose = (int? code, String? reason) {
-      print('Closed by server [$code => $reason]!');
-      onSignalingStateChange?.call(SignalingState.ConnectionClosed);
-    };
+    channel.stream.listen(
+      (event) {
+        print('Received data: ' + event);
+        onMessage(_decoder.convert(event));
+      },
+      onDone: () {
+        print('Closed by server!');
+        onSignalingStateChange?.call(SignalingState.ConnectionClosed);
+      },
+    );
 
-    await _socket?.connect();
+    print('onOpen');
+    onSignalingStateChange?.call(SignalingState.ConnectionOpen);
+    _send('new', {
+      'name': DeviceInfo.label,
+      'id': _selfId,
+      'user_agent': DeviceInfo.userAgent
+    });
   }
 
   Future<MediaStream> createStream(String media, bool userScreen,
@@ -413,50 +404,6 @@ class Signaling {
           });
           break;
       }
-
-      // Unified-Plan: Simuclast
-      /*
-      await pc.addTransceiver(
-        track: _localStream.getAudioTracks()[0],
-        init: RTCRtpTransceiverInit(
-            direction: TransceiverDirection.SendOnly, streams: [_localStream]),
-      );
-
-      await pc.addTransceiver(
-        track: _localStream.getVideoTracks()[0],
-        init: RTCRtpTransceiverInit(
-            direction: TransceiverDirection.SendOnly,
-            streams: [
-              _localStream
-            ],
-            sendEncodings: [
-              RTCRtpEncoding(rid: 'f', active: true),
-              RTCRtpEncoding(
-                rid: 'h',
-                active: true,
-                scaleResolutionDownBy: 2.0,
-                maxBitrate: 150000,
-              ),
-              RTCRtpEncoding(
-                rid: 'q',
-                active: true,
-                scaleResolutionDownBy: 4.0,
-                maxBitrate: 100000,
-              ),
-            ]),
-      );*/
-      /*
-        var sender = pc.getSenders().find(s => s.track.kind == "video");
-        var parameters = sender.getParameters();
-        if(!parameters)
-          parameters = {};
-        parameters.encodings = [
-          { rid: "h", active: true, maxBitrate: 900000 },
-          { rid: "m", active: true, maxBitrate: 300000, scaleResolutionDownBy: 2 },
-          { rid: "l", active: true, maxBitrate: 100000, scaleResolutionDownBy: 4 }
-        ];
-        sender.setParameters(parameters);
-      */
     }
     pc.onIceCandidate = (candidate) async {
       // This delay is needed to allow enough time to try an ICE candidate
@@ -555,7 +502,7 @@ class Signaling {
     var request = Map();
     request["type"] = event;
     request["data"] = data;
-    _socket?.send(_encoder.convert(request));
+    _channel?.sink.add(_encoder.convert(request));
   }
 
   Future<void> _cleanSessions() async {
